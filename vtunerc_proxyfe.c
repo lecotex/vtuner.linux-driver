@@ -135,7 +135,14 @@ static int dvb_proxyfe_get_frontend(struct dvb_frontend *fe,
 		}
 		break;
 	case VT_C:
-		/*FIXME*/
+		/* FIXME: untested */
+		{
+			struct dvb_qam_parameters *op = &p->u.qam;
+
+			op->symbol_rate = msg.body.fe_params.u.qam.symbol_rate;
+			op->fec_inner = msg.body.fe_params.u.qam.fec_inner;
+			op->modulation = msg.body.fe_params.u.qam.modulation;
+		}
 		break;
 	default:
 		printk(PRINTK_ERR "%s unregognized tuner vtype = %d\n", __func__, vtunerc->vtype);
@@ -258,7 +265,15 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe,
 		}
 		break;
 	case VT_C:
-		/*TODO*/
+		/* FIXME: untested */
+		{
+			struct dvb_qam_parameters *op = &p->u.qam;
+
+			msg.body.fe_params.u.qam.symbol_rate = op->symbol_rate;
+			msg.body.fe_params.u.qam.fec_inner = op->fec_inner;
+			msg.body.fe_params.u.qam.modulation = op->modulation;
+		}
+		break;
 	default:
 		printk(PRINTK_ERR "%s: unregognized tuner vtype = %d\n", __func__,
 				vtunerc->vtype);
