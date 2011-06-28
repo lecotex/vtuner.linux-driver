@@ -269,7 +269,8 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 		break;
 
 	default:
-		printk(PRINTK_WARN "vtunerc: WARN: unknown IOCTL 0x%x\n", cmd);
+		printk(PRINTK_ERR "vtunerc: ERR: unknown IOCTL 0x%x\n", cmd);
+		ret = -ENOTTY; /* Linus: the only correct one return value for unsupported ioctl */
 
 		break;
 	}
