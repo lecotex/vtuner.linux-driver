@@ -34,7 +34,7 @@
 
 #include "vtunerc_priv.h"
 
-#define VTUNERC_MODULE_VERSION "1.0"
+#define VTUNERC_MODULE_VERSION "1.1"
 
 #define MSGHEADER "[vtunerc]: "
 
@@ -49,6 +49,7 @@ DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
 
 int devices = 1;
+int tscheck = 0;
 
 static int pidtab_find_index(unsigned short *pidtab, int pid)
 {
@@ -394,4 +395,7 @@ MODULE_VERSION(VTUNERC_MODULE_VERSION);
 
 module_param(devices, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 MODULE_PARM_DESC(devices, "Number of virtual adapters (default is 1)");
+
+module_param(tscheck, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(tscheck, "Check TS packet validity (default is 0)");
 

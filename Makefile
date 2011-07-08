@@ -19,7 +19,7 @@ EXTRA_CFLAGS += -DHAVE_DVB_API_VERSION=5
 # for external compilation
 #
 
-KDIR ?= /usr/src/linux/
+KDIR ?= /usr/src/`uname -r`
 PWD := $(shell pwd)
 
 default:

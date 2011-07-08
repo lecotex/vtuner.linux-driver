@@ -30,18 +30,26 @@
 
 #define VTUNER_MSG_LEN (sizeof(struct vtuner_message))
 
+extern int tscheck;
+
 static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 					size_t len, loff_t *off)
 {
 	struct vtunerc_ctx *vtunerc = filp->private_data;
 	struct dvb_demux *demux = &vtunerc->demux;
 	char *kernel_buf;
-	size_t origlen = len;
+	int tailsize = len % 188;
 
 	if (vtunerc->closing)
 		return -EINTR;
 
-	kernel_buf = kmalloc(len + vtunerc->trailsize, GFP_KERNEL);
+	if (len < 188) {
+		printk(PRINTK_ERR "%s: ERR: Data are shorter then TS packet size (188)\n", __func__);
+		return -EINVAL;
+	}
+
+	len -= tailsize;
+	kernel_buf = kmalloc(len, GFP_KERNEL);
 
 	if (kernel_buf == NULL)
 		return -ENOMEM;
@@ -49,27 +57,23 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 	if (down_interruptible(&vtunerc->tswrite_sem))
 		return -ERESTARTSYS;
 
-	if (vtunerc->trailsize)
-		memcpy(kernel_buf, vtunerc->trail, vtunerc->trailsize);
-
-	if (copy_from_user(kernel_buf + vtunerc->trailsize, buff, len)) {
+	if (copy_from_user(kernel_buf, buff, len)) {
 		printk(PRINTK_ERR "%s: ERR: in userdata passing\n", __func__);
 		up(&vtunerc->tswrite_sem);
-		return 0;
+		return -EINVAL;
 	}
 
-	if (kernel_buf[0] != 0x47) { /* start of TS packet */
-		printk(PRINTK_ERR "%s: WARN: Data not start on packet boundary: %02x %02x %02x %02x %02x ...\n",
-				__func__, kernel_buf[0], kernel_buf[1],
-				kernel_buf[2], kernel_buf[3], kernel_buf[4]);
-	}
+	if (tscheck) {
+		int i;
 
-	len += vtunerc->trailsize;
-	vtunerc->trailsize = len % 188;
-	if ((vtunerc->trailsize)) {
-		/* saving last partial TS packet */
-		len -= vtunerc->trailsize;
-		memcpy(vtunerc->trail, kernel_buf + len, vtunerc->trailsize);
+		for (i = 0; i < len; i += 188)
+			if (kernel_buf[i] != 0x47) { /* start of TS packet */
+				printk(PRINTK_ERR "%s: ERR: Data not start on packet boundary: index=%d data=%02x %02x %02x %02x %02x ...\n",
+						__func__, i / 188, kernel_buf[i], kernel_buf[i + 1],
+						kernel_buf[i + 2], kernel_buf[i + 3], kernel_buf[i + 4]);
+				up(&vtunerc->tswrite_sem);
+				return -EINVAL;
+			}
 	}
 
 	vtunerc->stat_wr_data += len;
@@ -83,7 +87,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 
 	kfree(kernel_buf);
 
-	return origlen;
+	return len;
 }
 
 static ssize_t vtunerc_ctrldev_read(struct file *filp, char __user *buff,
