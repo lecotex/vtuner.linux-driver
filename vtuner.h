@@ -48,53 +48,53 @@
 #define MSG_UPDATE       		1026
 
 struct diseqc_master_cmd {
-	__u8 msg[6];
-	__u8 msg_len;
+	u8 msg[6];
+	u8 msg_len;
 };
 
 struct vtuner_message {
-	__s32 type;
+	s32 type;
 	union {
 		struct {
-			__u32	frequency;
-			__u8	inversion;
+			u32	frequency;
+			u8	inversion;
 			union {
 				struct {
-					__u32	symbol_rate;
-					__u32	fec_inner;
+					u32	symbol_rate;
+					u32	fec_inner;
 				} qpsk;
 				struct {
-					__u32   symbol_rate;
-					__u32   fec_inner;
-					__u32	modulation;
+					u32   symbol_rate;
+					u32   fec_inner;
+					u32	modulation;
 				} qam;
 				struct {
-					__u32	bandwidth;
-					__u32	code_rate_HP;
-					__u32	code_rate_LP;
-					__u32	constellation;
-					__u32	transmission_mode;
-					__u32	guard_interval;
-					__u32	hierarchy_information;
+					u32	bandwidth;
+					u32	code_rate_HP;
+					u32	code_rate_LP;
+					u32	constellation;
+					u32	transmission_mode;
+					u32	guard_interval;
+					u32	hierarchy_information;
 				} ofdm;
 				struct {
-					__u32	modulation;
+					u32	modulation;
 				} vsb;
 			} u;
 		} fe_params;
 		struct dtv_property prop;
-		__u32 status;
-		__u32 ber;
-		__u16 ss;
-		__u16 snr;
-		__u32 ucb;
-		__u8 tone;
-		__u8 voltage;
+		u32 status;
+		u32 ber;
+		u16 ss;
+		u16 snr;
+		u32 ucb;
+		u8 tone;
+		u8 voltage;
 		struct diseqc_master_cmd diseqc_master_cmd;
-		__u8 burst;
-		__u16 pidlist[30];
-		__u8  pad[72];
-		__u32 type_changed;
+		u8 burst;
+		u16 pidlist[30];
+		u8  pad[72];
+		u32 type_changed;
 	} body;
 };
 

@@ -36,6 +36,13 @@
 
 #define MAX_NUM_VTUNER_MODES 3
 
+struct vtunerc_config {
+
+	int debug;
+	int tscheck;
+	int devices;
+};
+
 struct vtunerc_ctx {
 
 	/* DVB api */
@@ -53,8 +60,9 @@ struct vtunerc_ctx {
 	/* internals */
 	int idx;
 	char *name;
-	__u8 vtype;
+	u8 vtype;
 	struct dvb_frontend_info *feinfo;
+	struct vtunerc_config *config;
 
 	unsigned short pidtab[MAX_PIDTAB_LEN];
 
@@ -84,17 +92,17 @@ struct vtunerc_ctx {
 	unsigned short pidstat[MAX_PIDTAB_LEN];
 };
 
-int vtunerc_register_ctrldev(void);
-void vtunerc_unregister_ctrldev(void);
+int vtunerc_register_ctrldev(struct vtunerc_ctx *ctx);
+void vtunerc_unregister_ctrldev(struct vtunerc_config *config);
 struct vtunerc_ctx *vtunerc_get_ctx(int minor);
 int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx);
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx,
 					struct vtuner_message *msg,
 					int wait4response);
-
-#define PRINTK_ERR ""
-#define PRINTK_WARN ""
-#define PRINTK_NOTICE ""
+#define dprintk(ctx, fmt, arg...) do {					\
+if (ctx->config && (*ctx->config.debug))				\
+	printk(KERN_DEBUG "vtunerc%d: %s", ctx->idx, fmt, ## arg);	\
+} while (0)
 
 #endif

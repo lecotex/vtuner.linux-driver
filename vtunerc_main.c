@@ -30,13 +30,9 @@
 #include "dvb_net.h"
 #include "dvbdev.h"
 
-#include "vtuner.h"
-
 #include "vtunerc_priv.h"
 
-#define VTUNERC_MODULE_VERSION "1.1"
-
-#define MSGHEADER "[vtunerc]: "
+#define VTUNERC_MODULE_VERSION "1.1p3"
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
@@ -48,8 +44,12 @@ DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
 static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
 
-int devices = 1;
-int tscheck = 0;
+/* module params */
+static struct vtunerc_config config = {
+	.devices = 1,
+	.tscheck = 0,
+	.debug = 0
+};
 
 static int pidtab_find_index(unsigned short *pidtab, int pid)
 {
@@ -95,20 +95,20 @@ static int pidtab_del_pid(unsigned short *pidtab, int pid)
 	return -1;
 }
 
-static void pidtab_copy_to_msg(struct vtunerc_ctx *vtunerc,
+static void pidtab_copy_to_msg(struct vtunerc_ctx *ctx,
 				struct vtuner_message *msg)
 {
 	int i;
 
 	for (i = 0; i < (MAX_PIDTAB_LEN - 1); i++)
-		msg->body.pidlist[i] = vtunerc->pidtab[i]; /*TODO: optimize it*/
+		msg->body.pidlist[i] = ctx->pidtab[i]; /*TODO: optimize it*/
 	msg->body.pidlist[MAX_PIDTAB_LEN - 1] = 0;
 }
 
 static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 {
 	struct dvb_demux *demux = feed->demux;
-	struct vtunerc_ctx *vtunerc = demux->priv;
+	struct vtunerc_ctx *ctx = demux->priv;
 	struct vtuner_message msg;
 
 	switch (feed->type) {
@@ -117,23 +117,24 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 	case DMX_TYPE_SEC:
 		break;
 	case DMX_TYPE_PES:
-		printk(MSGHEADER " feed type PES is not supported\n");
+		printk(KERN_ERR "vtunerc%d: feed type PES is not supported\n",
+				ctx->idx);
 		return -EINVAL;
 	default:
-		printk(MSGHEADER " feed type %d is not supported\n",
-				feed->type);
+		printk(KERN_ERR "vtunerc%d: feed type %d is not supported\n",
+				ctx->idx, feed->type);
 		return -EINVAL;
 	}
 
 	/* organize PID list table */
 
-	if (pidtab_find_index(vtunerc->pidtab, feed->pid) < 0) {
-		pidtab_add_pid(vtunerc->pidtab, feed->pid);
+	if (pidtab_find_index(ctx->pidtab, feed->pid) < 0) {
+		pidtab_add_pid(ctx->pidtab, feed->pid);
 
-		pidtab_copy_to_msg(vtunerc, &msg);
+		pidtab_copy_to_msg(ctx, &msg);
 
 		msg.type = MSG_PIDLIST;
-		vtunerc_ctrldev_xchange_message(vtunerc, &msg, 0);
+		vtunerc_ctrldev_xchange_message(ctx, &msg, 0);
 	}
 
 	return 0;
@@ -142,18 +143,18 @@ static int vtunerc_start_feed(struct dvb_demux_feed *feed)
 static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 {
 	struct dvb_demux *demux = feed->demux;
-	struct vtunerc_ctx *vtunerc = demux->priv;
+	struct vtunerc_ctx *ctx = demux->priv;
 	struct vtuner_message msg;
 
 	/* organize PID list table */
 
-	if (pidtab_find_index(vtunerc->pidtab, feed->pid) > -1) {
-		pidtab_del_pid(vtunerc->pidtab, feed->pid);
+	if (pidtab_find_index(ctx->pidtab, feed->pid) > -1) {
+		pidtab_del_pid(ctx->pidtab, feed->pid);
 
-		pidtab_copy_to_msg(vtunerc, &msg);
+		pidtab_copy_to_msg(ctx, &msg);
 
 		msg.type = MSG_PIDLIST;
-		vtunerc_ctrldev_xchange_message(vtunerc, &msg, 0);
+		vtunerc_ctrldev_xchange_message(ctx, &msg, 0);
 	}
 
 	return 0;
@@ -163,7 +164,12 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
 
 
 #ifdef CONFIG_PROC_FS
-#define MAXBUF 512
+
+static char *get_fe_name(struct dvb_frontend_info *feinfo)
+{
+	return (feinfo && feinfo->name) ? feinfo->name : "(not set)";
+}
+
 /**
  * @brief  procfs file handler
  * @param  buffer:
@@ -175,32 +181,33 @@ static int vtunerc_stop_feed(struct dvb_demux_feed *feed)
  * @return =0: success <br/>
  *         <0: if any error occur
  */
+#define MAXBUF 512
 int vtunerc_read_proc(char *buffer, char **start, off_t offset, int size,
 			int *eof, void *data)
 {
 	char outbuf[MAXBUF] = "[ vtunerc driver, version "
 				VTUNERC_MODULE_VERSION " ]\n";
 	int blen, i, pcnt;
-	struct vtunerc_ctx *vtunerc = (struct vtunerc_ctx *)data;
+	struct vtunerc_ctx *ctx = (struct vtunerc_ctx *)data;
 
 	blen = strlen(outbuf);
-	sprintf(outbuf+blen, "  sessions: %u\n", vtunerc->stat_ctrl_sess);
+	sprintf(outbuf+blen, "  sessions: %u\n", ctx->stat_ctrl_sess);
 	blen = strlen(outbuf);
-	sprintf(outbuf+blen, "  read    : %u\n", vtunerc->stat_rd_data);
-	blen = strlen(outbuf);
-	sprintf(outbuf+blen, "  write   : %u\n", vtunerc->stat_wr_data);
+	sprintf(outbuf+blen, "  TS data : %u\n", ctx->stat_wr_data);
 	blen = strlen(outbuf);
 	sprintf(outbuf+blen, "  PID tab :");
 	pcnt = 0;
 	for (i = 0; i < MAX_PIDTAB_LEN; i++) {
 		blen = strlen(outbuf);
-		if (vtunerc->pidtab[i] != PID_UNKNOWN) {
-			sprintf(outbuf+blen, " %x", vtunerc->pidtab[i]);
+		if (ctx->pidtab[i] != PID_UNKNOWN) {
+			sprintf(outbuf+blen, " %x", ctx->pidtab[i]);
 			pcnt++;
 		}
 	}
 	blen = strlen(outbuf);
 	sprintf(outbuf+blen, " (len=%d)\n", pcnt);
+	blen = strlen(outbuf);
+	sprintf(outbuf+blen, "  FE type : %s\n", get_fe_name(ctx->feinfo));
 
 	blen = strlen(outbuf);
 
@@ -238,43 +245,44 @@ struct vtunerc_ctx *vtunerc_get_ctx(int minor)
 
 static int __init vtunerc_init(void)
 {
-	struct vtunerc_ctx *vtunerc;
+	struct vtunerc_ctx *ctx = NULL;
 	struct dvb_demux *dvbdemux;
 	struct dmx_demux *dmx;
 	int ret = -EINVAL, i, idx;
 
-	printk(KERN_INFO "vTunerc DVB multi adapter driver, version "
+	printk(KERN_INFO "virtual DVB adapter driver, version "
 			VTUNERC_MODULE_VERSION
 			", (c) 2010-11 Honza Petrous, SmartImp.cz\n");
 
 	request_module("dvb-core"); /* FIXME: dunno which way it should work :-/ */
 
-	for (idx = 0; idx < devices; idx++) {
-		vtunerc = kzalloc(sizeof(struct vtunerc_ctx), GFP_KERNEL);
-		if (!vtunerc)
+	for (idx = 0; idx < config.devices; idx++) {
+		ctx = kzalloc(sizeof(struct vtunerc_ctx), GFP_KERNEL);
+		if (!ctx)
 			return -ENOMEM;
 
-		vtunerc_tbl[idx] = vtunerc;
+		vtunerc_tbl[idx] = ctx;
 
-		vtunerc->idx = idx;
-		vtunerc->ctrldev_request.type = -1;
-		vtunerc->ctrldev_response.type = -1;
-		init_waitqueue_head(&vtunerc->ctrldev_wait_request_wq);
-		init_waitqueue_head(&vtunerc->ctrldev_wait_response_wq);
+		ctx->idx = idx;
+		ctx->config = &config;
+		ctx->ctrldev_request.type = -1;
+		ctx->ctrldev_response.type = -1;
+		init_waitqueue_head(&ctx->ctrldev_wait_request_wq);
+		init_waitqueue_head(&ctx->ctrldev_wait_response_wq);
 
 		/* dvb */
 
 		/* create new adapter */
-		ret = dvb_register_adapter(&vtunerc->dvb_adapter, DRIVER_NAME,
+		ret = dvb_register_adapter(&ctx->dvb_adapter, DRIVER_NAME,
 					   THIS_MODULE, NULL, adapter_nr);
 		if (ret < 0)
 			goto err_kfree;
 
-		vtunerc->dvb_adapter.priv = vtunerc;
+		ctx->dvb_adapter.priv = ctx;
 
-		memset(&vtunerc->demux, 0, sizeof(vtunerc->demux));
-		dvbdemux = &vtunerc->demux;
-		dvbdemux->priv = vtunerc;
+		memset(&ctx->demux, 0, sizeof(ctx->demux));
+		dvbdemux = &ctx->demux;
+		dvbdemux->priv = ctx;
 		dvbdemux->filternum = MAX_PIDTAB_LEN;
 		dvbdemux->feednum = MAX_PIDTAB_LEN;
 		dvbdemux->start_feed = vtunerc_start_feed;
@@ -286,70 +294,70 @@ static int __init vtunerc_init(void)
 
 		dmx = &dvbdemux->dmx;
 
-		vtunerc->hw_frontend.source = DMX_FRONTEND_0;
-		vtunerc->mem_frontend.source = DMX_MEMORY_FE;
-		vtunerc->dmxdev.filternum = MAX_PIDTAB_LEN;
-		vtunerc->dmxdev.demux = dmx;
+		ctx->hw_frontend.source = DMX_FRONTEND_0;
+		ctx->mem_frontend.source = DMX_MEMORY_FE;
+		ctx->dmxdev.filternum = MAX_PIDTAB_LEN;
+		ctx->dmxdev.demux = dmx;
 
-		ret = dvb_dmxdev_init(&vtunerc->dmxdev, &vtunerc->dvb_adapter);
+		ret = dvb_dmxdev_init(&ctx->dmxdev, &ctx->dvb_adapter);
 		if (ret < 0)
 			goto err_dvb_dmx_release;
 
-		ret = dmx->add_frontend(dmx, &vtunerc->hw_frontend);
+		ret = dmx->add_frontend(dmx, &ctx->hw_frontend);
 		if (ret < 0)
 			goto err_dvb_dmxdev_release;
 
-		ret = dmx->add_frontend(dmx, &vtunerc->mem_frontend);
+		ret = dmx->add_frontend(dmx, &ctx->mem_frontend);
 		if (ret < 0)
 			goto err_remove_hw_frontend;
 
-		ret = dmx->connect_frontend(dmx, &vtunerc->hw_frontend);
+		ret = dmx->connect_frontend(dmx, &ctx->hw_frontend);
 		if (ret < 0)
 			goto err_remove_mem_frontend;
 
-		sema_init(&vtunerc->xchange_sem, 1);
-		sema_init(&vtunerc->ioctl_sem, 1);
-		sema_init(&vtunerc->tswrite_sem, 1);
+		sema_init(&ctx->xchange_sem, 1);
+		sema_init(&ctx->ioctl_sem, 1);
+		sema_init(&ctx->tswrite_sem, 1);
 
 		/* init pid table */
 		for (i = 0; i < MAX_PIDTAB_LEN; i++)
-			vtunerc->pidtab[i] = PID_UNKNOWN;
+			ctx->pidtab[i] = PID_UNKNOWN;
 
 #ifdef CONFIG_PROC_FS
 		{
 			char procfilename[64];
 
 			sprintf(procfilename, VTUNERC_PROC_FILENAME,
-					vtunerc->idx);
-			vtunerc->procname = my_strdup(procfilename);
-			if (create_proc_read_entry(vtunerc->procname, 0, NULL,
+					ctx->idx);
+			ctx->procname = my_strdup(procfilename);
+			if (create_proc_read_entry(ctx->procname, 0, NULL,
 							vtunerc_read_proc,
-							vtunerc) == 0)
-				printk(MSGHEADER
-					"Unable to register '%s' proc file\n",
-					vtunerc->procname);
+							ctx) == 0)
+				printk(KERN_WARNING
+					"vtunerc%d: Unable to register '%s' proc file\n",
+					ctx->idx, ctx->procname);
 		}
 #endif
 	}
 
-	vtunerc_register_ctrldev();
+	vtunerc_register_ctrldev(ctx);
 
 out:
 	return ret;
 
 	dmx->disconnect_frontend(dmx);
 err_remove_mem_frontend:
-	dmx->remove_frontend(dmx, &vtunerc->mem_frontend);
+	dmx->remove_frontend(dmx, &ctx->mem_frontend);
 err_remove_hw_frontend:
-	dmx->remove_frontend(dmx, &vtunerc->hw_frontend);
+	dmx->remove_frontend(dmx, &ctx->hw_frontend);
 err_dvb_dmxdev_release:
-	dvb_dmxdev_release(&vtunerc->dmxdev);
+	dvb_dmxdev_release(&ctx->dmxdev);
 err_dvb_dmx_release:
 	dvb_dmx_release(dvbdemux);
 err_dvb_unregister_adapter:
-	dvb_unregister_adapter(&vtunerc->dvb_adapter);
+	dvb_unregister_adapter(&ctx->dvb_adapter);
 err_kfree:
-	kfree(vtunerc);
+	kfree(ctx);
 	goto out;
 }
 
@@ -359,30 +367,33 @@ static void __exit vtunerc_exit(void)
 	struct dmx_demux *dmx;
 	int idx;
 
-	vtunerc_unregister_ctrldev();
+	vtunerc_unregister_ctrldev(&config);
 
-	for (idx = 0; idx < devices; idx++) {
-		struct vtunerc_ctx *vtunerc = vtunerc_tbl[idx];
+	for (idx = 0; idx < config.devices; idx++) {
+		struct vtunerc_ctx *ctx = vtunerc_tbl[idx];
+		if(!ctx)
+			continue;
+		vtunerc_tbl[idx] = NULL;
 #ifdef CONFIG_PROC_FS
-		remove_proc_entry(vtunerc->procname, NULL);
-		kfree(vtunerc->procname);
+		remove_proc_entry(ctx->procname, NULL);
+		kfree(ctx->procname);
 #endif
 
-		vtunerc_frontend_clear(vtunerc);
+		vtunerc_frontend_clear(ctx);
 
-		dvbdemux = &vtunerc->demux;
+		dvbdemux = &ctx->demux;
 		dmx = &dvbdemux->dmx;
 
 		dmx->disconnect_frontend(dmx);
-		dmx->remove_frontend(dmx, &vtunerc->mem_frontend);
-		dmx->remove_frontend(dmx, &vtunerc->hw_frontend);
-		dvb_dmxdev_release(&vtunerc->dmxdev);
+		dmx->remove_frontend(dmx, &ctx->mem_frontend);
+		dmx->remove_frontend(dmx, &ctx->hw_frontend);
+		dvb_dmxdev_release(&ctx->dmxdev);
 		dvb_dmx_release(dvbdemux);
-		dvb_unregister_adapter(&vtunerc->dvb_adapter);
-		kfree(vtunerc);
+		dvb_unregister_adapter(&ctx->dvb_adapter);
+		kfree(ctx);
 	}
 
-	printk(MSGHEADER " unloaded successfully\n");
+	printk(KERN_NOTICE "vtunerc: unloaded successfully\n");
 }
 
 module_init(vtunerc_init);
@@ -393,9 +404,12 @@ MODULE_DESCRIPTION("virtual DVB device");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(VTUNERC_MODULE_VERSION);
 
-module_param(devices, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+module_param_named(devices, config.devices, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 MODULE_PARM_DESC(devices, "Number of virtual adapters (default is 1)");
 
-module_param(tscheck, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+module_param_named(tscheck, config.tscheck, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 MODULE_PARM_DESC(tscheck, "Check TS packet validity (default is 0)");
+
+module_param_named(debug, config.debug, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(debug, "Enable debug messages (default is 0)");
 

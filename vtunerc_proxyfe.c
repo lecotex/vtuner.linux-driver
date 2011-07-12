@@ -25,18 +25,18 @@
 
 struct dvb_proxyfe_state {
 	struct dvb_frontend frontend;
-	struct vtunerc_ctx *vtunerc;
+	struct vtunerc_ctx *ctx;
 };
 
 
 static int dvb_proxyfe_read_status(struct dvb_frontend *fe, fe_status_t *status)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	msg.type = MSG_READ_STATUS;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
 	*status = msg.body.status;
 
@@ -46,11 +46,11 @@ static int dvb_proxyfe_read_status(struct dvb_frontend *fe, fe_status_t *status)
 static int dvb_proxyfe_read_ber(struct dvb_frontend *fe, u32 *ber)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	msg.type = MSG_READ_BER;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
 	*ber = msg.body.ber;
 
@@ -61,11 +61,11 @@ static int dvb_proxyfe_read_signal_strength(struct dvb_frontend *fe,
 						u16 *strength)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	msg.type = MSG_READ_SIGNAL_STRENGTH;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
 	*strength = msg.body.ss;
 
@@ -75,11 +75,11 @@ static int dvb_proxyfe_read_signal_strength(struct dvb_frontend *fe,
 static int dvb_proxyfe_read_snr(struct dvb_frontend *fe, u16 *snr)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	msg.type = MSG_READ_SNR;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
 	*snr = msg.body.snr;
 
@@ -89,11 +89,11 @@ static int dvb_proxyfe_read_snr(struct dvb_frontend *fe, u16 *snr)
 static int dvb_proxyfe_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	msg.type = MSG_READ_UCBLOCKS;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
 	*ucblocks = msg.body.ucb;
 
@@ -104,13 +104,13 @@ static int dvb_proxyfe_get_frontend(struct dvb_frontend *fe,
 					struct dvb_frontend_parameters *p)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	msg.type = MSG_GET_FRONTEND;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
-	switch (vtunerc->vtype) {
+	switch (ctx->vtype) {
 	case VT_S:
 	case VT_S2:
 		/*FIXME*/
@@ -145,7 +145,8 @@ static int dvb_proxyfe_get_frontend(struct dvb_frontend *fe,
 		}
 		break;
 	default:
-		printk(PRINTK_ERR "%s unregognized tuner vtype = %d\n", __func__, vtunerc->vtype);
+		printk(KERN_ERR "vtunerc%d: unregognized tuner vtype = %d\n", ctx->idx,
+				ctx->vtype);
 		return -EINVAL;
 	}
 	p->frequency = msg.body.fe_params.frequency;
@@ -157,14 +158,14 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe,
 					struct dvb_frontend_parameters *p)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	memset(&msg, 0, sizeof(msg));
 	msg.body.fe_params.frequency = p->frequency;
 	msg.body.fe_params.inversion = p->inversion;
 
-	switch (vtunerc->vtype) {
+	switch (ctx->vtype) {
 	case VT_S:
 	case VT_S2:
 		{
@@ -174,7 +175,7 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe,
 			msg.body.fe_params.u.qpsk.symbol_rate = op->symbol_rate;
 			msg.body.fe_params.u.qpsk.fec_inner = op->fec_inner;
 
-			if (vtunerc->vtype == VT_S2 && props->delivery_system == SYS_DVBS2) {
+			if (ctx->vtype == VT_S2 && props->delivery_system == SYS_DVBS2) {
 				/* DELIVERY SYSTEM: S2 delsys in use */
 				msg.body.fe_params.u.qpsk.fec_inner = 9;
 
@@ -275,13 +276,13 @@ static int dvb_proxyfe_set_frontend(struct dvb_frontend *fe,
 		}
 		break;
 	default:
-		printk(PRINTK_ERR "%s: unregognized tuner vtype = %d\n", __func__,
-				vtunerc->vtype);
+		printk(KERN_ERR "vtunerc%d: unregognized tuner vtype = %d\n",
+				ctx->idx, ctx->vtype);
 		return -EINVAL;
 	}
 
 	msg.type = MSG_SET_FRONTEND;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
 	return 0;
 }
@@ -309,12 +310,12 @@ static int dvb_proxyfe_init(struct dvb_frontend *fe)
 static int dvb_proxyfe_set_tone(struct dvb_frontend *fe, fe_sec_tone_mode_t tone)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	msg.body.tone = tone;
 	msg.type = MSG_SET_TONE;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
 	return 0;
 }
@@ -322,12 +323,12 @@ static int dvb_proxyfe_set_tone(struct dvb_frontend *fe, fe_sec_tone_mode_t tone
 static int dvb_proxyfe_set_voltage(struct dvb_frontend *fe, fe_sec_voltage_t voltage)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	msg.body.voltage = voltage;
 	msg.type = MSG_SET_VOLTAGE;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
 	return 0;
 }
@@ -335,12 +336,12 @@ static int dvb_proxyfe_set_voltage(struct dvb_frontend *fe, fe_sec_voltage_t vol
 static int dvb_proxyfe_send_diseqc_msg(struct dvb_frontend *fe, struct dvb_diseqc_master_cmd *cmd)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	memcpy(&msg.body.diseqc_master_cmd, cmd, sizeof(struct dvb_diseqc_master_cmd));
 	msg.type = MSG_SEND_DISEQC_MSG;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
 	return 0;
 }
@@ -348,12 +349,12 @@ static int dvb_proxyfe_send_diseqc_msg(struct dvb_frontend *fe, struct dvb_diseq
 static int dvb_proxyfe_send_diseqc_burst(struct dvb_frontend *fe, fe_sec_mini_cmd_t burst)
 {
 	struct dvb_proxyfe_state *state = fe->demodulator_priv;
-	struct vtunerc_ctx *vtunerc = state->vtunerc;
+	struct vtunerc_ctx *ctx = state->ctx;
 	struct vtuner_message msg;
 
 	msg.body.burst = burst;
 	msg.type = MSG_SEND_DISEQC_BURST;
-	vtunerc_ctrldev_xchange_message(vtunerc, &msg, 1);
+	vtunerc_ctrldev_xchange_message(ctx, &msg, 1);
 
 	return 0;
 }
@@ -367,7 +368,7 @@ static void dvb_proxyfe_release(struct dvb_frontend *fe)
 
 static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops;
 
-static struct dvb_frontend *dvb_proxyfe_ofdm_attach(struct vtunerc_ctx *vtunerc)
+static struct dvb_frontend *dvb_proxyfe_ofdm_attach(struct vtunerc_ctx *ctx)
 {
 	struct dvb_proxyfe_state *state = NULL;
 
@@ -379,7 +380,7 @@ static struct dvb_frontend *dvb_proxyfe_ofdm_attach(struct vtunerc_ctx *vtunerc)
 	/* create dvb_frontend */
 	memcpy(&state->frontend.ops, &dvb_proxyfe_ofdm_ops, sizeof(struct dvb_frontend_ops));
 	state->frontend.demodulator_priv = state;
-	state->vtunerc = vtunerc;
+	state->ctx = ctx;
 	return &state->frontend;
 
 error:
@@ -389,7 +390,7 @@ error:
 
 static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops;
 
-static struct dvb_frontend *dvb_proxyfe_qpsk_attach(struct vtunerc_ctx *vtunerc, int can_2g_modulation)
+static struct dvb_frontend *dvb_proxyfe_qpsk_attach(struct vtunerc_ctx *ctx, int can_2g_modulation)
 {
 	struct dvb_proxyfe_state *state = NULL;
 
@@ -405,7 +406,7 @@ static struct dvb_frontend *dvb_proxyfe_qpsk_attach(struct vtunerc_ctx *vtunerc,
 		strcpy(state->frontend.ops.info.name, "vTuner proxyFE DVB-S2");
 	}
 	state->frontend.demodulator_priv = state;
-	state->vtunerc = vtunerc;
+	state->ctx = ctx;
 	return &state->frontend;
 
 error:
@@ -415,7 +416,7 @@ error:
 
 static struct dvb_frontend_ops dvb_proxyfe_qam_ops;
 
-static struct dvb_frontend *dvb_proxyfe_qam_attach(struct vtunerc_ctx *vtunerc)
+static struct dvb_frontend *dvb_proxyfe_qam_attach(struct vtunerc_ctx *ctx)
 {
 	struct dvb_proxyfe_state *state = NULL;
 
@@ -427,7 +428,7 @@ static struct dvb_frontend *dvb_proxyfe_qam_attach(struct vtunerc_ctx *vtunerc)
 	/* create dvb_frontend */
 	memcpy(&state->frontend.ops, &dvb_proxyfe_qam_ops, sizeof(struct dvb_frontend_ops));
 	state->frontend.demodulator_priv = state;
-	state->vtunerc = vtunerc;
+	state->ctx = ctx;
 	return &state->frontend;
 
 error:
@@ -538,38 +539,40 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
 
 };
 
-int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *vtunerc)
+int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx)
 {
 	int ret;
 
-	if (vtunerc->fe) {
-		printk(PRINTK_NOTICE "%s: FE already initialized as type=%d\n", __func__, vtunerc->vtype);
+	if (ctx->fe) {
+		printk(KERN_NOTICE "vtunerc%d: frontend already initialized as type=%d\n",
+				ctx->idx, ctx->vtype);
 		return 0;
 	}
 
-	switch (vtunerc->vtype) {
+	switch (ctx->vtype) {
 	case VT_S:
-		vtunerc->fe = dvb_proxyfe_qpsk_attach(vtunerc, 0);
+		ctx->fe = dvb_proxyfe_qpsk_attach(ctx, 0);
 		break;
 	case VT_S2:
-		vtunerc->fe = dvb_proxyfe_qpsk_attach(vtunerc, 1);
+		ctx->fe = dvb_proxyfe_qpsk_attach(ctx, 1);
 		break;
 	case VT_T:
-		vtunerc->fe = dvb_proxyfe_ofdm_attach(vtunerc);
+		ctx->fe = dvb_proxyfe_ofdm_attach(ctx);
 		break;
 	case VT_C:
-		vtunerc->fe = dvb_proxyfe_qam_attach(vtunerc);
+		ctx->fe = dvb_proxyfe_qam_attach(ctx);
 		break;
 	default:
-		printk(PRINTK_ERR "%s unregognized tuner vtype = %d\n", __func__, vtunerc->vtype);
+		printk(KERN_ERR "vtunerc%d: unregognized tuner vtype = %d\n",
+				ctx->idx, ctx->vtype);
 		return -EINVAL;
 	}
-	ret = dvb_register_frontend(&vtunerc->dvb_adapter, vtunerc->fe);
+	ret = dvb_register_frontend(&ctx->dvb_adapter, ctx->fe);
 
 	return 0;
 }
 
-int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *vtunerc)
+int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx)
 {
-	return vtunerc->fe ? dvb_unregister_frontend(vtunerc->fe) : 0;
+	return ctx->fe ? dvb_unregister_frontend(ctx->fe) : 0;
 }
