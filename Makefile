@@ -8,18 +8,20 @@ CONFIG_DVB_VTUNERC ?= m
 
 obj-$(CONFIG_DVB_VTUNERC) += vtunerc.o
 
-EXTRA_CFLAGS += -Idrivers/media/dvb/dvb-core
-EXTRA_CFLAGS += -Idrivers/media/dvb/frontends
-EXTRA_CFLAGS += -Idrivers/media/common/tuners
-EXTRA_CFLAGS += -Iinclude/linux
-
-EXTRA_CFLAGS += -DHAVE_DVB_API_VERSION=5
+ccflags-y += -Idrivers/media/dvb/dvb-core
+ccflags-y += -Idrivers/media/dvb/frontends
+ccflags-y += -Idrivers/media/common/tuners
+ccflags-y += -Iinclude
 
 #
 # for external compilation
 #
 
-KDIR ?= /usr/src/`uname -r`
+#KDIR ?= /usr/src/`uname -r`
+ifeq ($(origin KDIR), undefined)
+	KDIR = /usr/src/$(shell uname -r)
+endif
+
 PWD := $(shell pwd)
 
 default:
