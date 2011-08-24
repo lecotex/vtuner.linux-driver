@@ -101,8 +101,8 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx,
 					struct vtuner_message *msg,
 					int wait4response);
 #define dprintk(ctx, fmt, arg...) do {					\
-if (ctx->config && (*ctx->config.debug))				\
-	printk(KERN_DEBUG "vtunerc%d: %s", ctx->idx, fmt, ## arg);	\
+if (ctx->config && (ctx->config->debug))				\
+	printk(KERN_DEBUG "vtunerc%d: " fmt, ctx->idx, ##arg);	\
 } while (0)
 
 #endif

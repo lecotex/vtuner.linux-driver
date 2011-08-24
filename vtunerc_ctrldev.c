@@ -127,6 +127,8 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	int minor;
 	struct vtuner_message fakemsg;
 
+	dprintk(ctx, "closing (fd_opened=%d)\n", ctx->fd_opened);
+
 	ctx->fd_opened--;
 	ctx->closing = 1;
 
@@ -135,14 +137,17 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	/* set FAKE response, to allow finish any waiters
 	   in vtunerc_ctrldev_xchange_message() */
 	ctx->ctrldev_response.type = 0;
+	dprintk(ctx, "faked response\n");
 	wake_up_interruptible(&ctx->ctrldev_wait_response_wq);
 
 	/* clear pidtab */
+	dprintk(ctx, "sending pidtab cleared ...\n");
 	if (down_interruptible(&ctx->xchange_sem))
 		return -ERESTARTSYS;
 	memset(&fakemsg, 0, sizeof(fakemsg));
 	vtunerc_ctrldev_xchange_message(ctx, &fakemsg, 0);
 	up(&ctx->xchange_sem);
+	dprintk(ctx, "pidtab clearing done\n");
 
 	return 0;
 }
@@ -162,6 +167,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 
 	switch (cmd) {
 	case VTUNER_SET_NAME:
+		dprintk(ctx, "msg VTUNER_SET_NAME\n");
 		len = strlen((char *)arg) + 1;
 		ctx->name = kmalloc(len, GFP_KERNEL);
 		if (ctx->name == NULL) {
@@ -176,6 +182,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 		break;
 
 	case VTUNER_SET_MODES:
+		dprintk(ctx, "msg VTUNER_SET_MODES\n");
 		for (i = 0; i < ctx->num_modes; i++)
 			ctx->ctypes[i] = &(((char *)(arg))[i*32]);
 		if (ctx->num_modes != 1) {
@@ -187,6 +194,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 		/* follow into old code for compatibility */
 
 	case VTUNER_SET_TYPE:
+		dprintk(ctx, "msg VTUNER_SET_TYPE\n");
 		if (strcasecmp((char *)arg, "DVB-S") == 0) {
 			ctx->vtype = VT_S;
 			printk(KERN_NOTICE "vtunerc%d: setting DVB-S tuner vtype\n",
@@ -225,6 +233,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 
 
 	case VTUNER_SET_FE_INFO:
+		dprintk(ctx, "msg VTUNER_SET_FE_INFO\n");
 		len = sizeof(struct dvb_frontend_info);
 		ctx->feinfo = kmalloc(len, GFP_KERNEL);
 		if (ctx->feinfo == NULL) {
@@ -239,6 +248,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 		break;
 
 	case VTUNER_GET_MESSAGE:
+		dprintk(ctx, "msg VTUNER_GET_MESSAGE\n");
 		if (wait_event_interruptible(ctx->ctrldev_wait_request_wq,
 					ctx->ctrldev_request.type != -1)) {
 			ret = -ERESTARTSYS;
@@ -261,6 +271,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 		break;
 
 	case VTUNER_SET_RESPONSE:
+		dprintk(ctx, "msg VTUNER_SET_RESPONSE\n");
 		if (copy_from_user(&ctx->ctrldev_response, (char *)arg,
 					VTUNER_MSG_LEN)) {
 			ret = -EFAULT;
@@ -270,6 +281,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 		break;
 
 	case VTUNER_SET_NUM_MODES:
+		dprintk(ctx, "msg VTUNER_SET_NUM_MODES (faked)\n");
 		ctx->num_modes = (int) arg;
 		break;
 
@@ -294,12 +306,11 @@ static unsigned int vtunerc_ctrldev_poll(struct file *filp, poll_table *wait)
 
 	poll_wait(filp, &ctx->ctrldev_wait_request_wq, wait);
 
-	if (ctx->ctrldev_request.type >= -1 ||
-			ctx->ctrldev_response.type >= -1) {
+	if (ctx->ctrldev_request.type > -1) {
 		mask = POLLPRI;
 	}
 
-  return mask;
+	return mask;
 }
 
 /* ------------------------------------------------ */
@@ -380,19 +391,22 @@ void vtunerc_unregister_ctrldev(struct vtunerc_config *config)
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx,
 		struct vtuner_message *msg, int wait4response)
 {
+	//dprintk(ctx, "XCH_MSG: %d: entered\n", msg->type);
 	if (down_interruptible(&ctx->xchange_sem))
 		return -ERESTARTSYS;
 
 	if (ctx->fd_opened < 1) {
+		//dprintk(ctx, "XCH_MSG: %d: no fd\n", msg->type);
 		up(&ctx->xchange_sem);
 		return 0;
 	}
+	//dprintk(ctx, "XCH_MSG: %d: continue\n", msg->type);
 
 #if 0
 	BUG_ON(ctx->ctrldev_request.type != -1);
 #else
 	if(ctx->ctrldev_request.type != -1)
-		printk(KERN_WARNING "orphan request type %d detected\n", ctx->ctrldev_request.type);
+		printk(KERN_WARNING "vtunerc%d: orphan request detected, type %d\n", ctx->idx, ctx->ctrldev_request.type);
 
 #endif
 
@@ -406,6 +420,7 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx,
 
 	if (wait_event_interruptible(ctx->ctrldev_wait_response_wq,
 				ctx->ctrldev_response.type != -1)) {
+		//dprintk(ctx, "XCH_MSG: %d: wait_event interrupted\n", msg->type);
 		ctx->ctrldev_request.type = -1;
 		up(&ctx->xchange_sem);
 		return -ERESTARTSYS;
@@ -413,6 +428,7 @@ int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx,
 
 	BUG_ON(ctx->ctrldev_response.type == -1);
 
+	//dprintk(ctx, "XCH_MSG: %d -> %d (DONE)\n", msg->type, ctx->ctrldev_response.type);
 	memcpy(msg, &ctx->ctrldev_response, sizeof(struct vtuner_message));
 	ctx->ctrldev_response.type = -1;
 

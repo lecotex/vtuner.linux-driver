@@ -32,7 +32,7 @@
 
 #include "vtunerc_priv.h"
 
-#define VTUNERC_MODULE_VERSION "1.1p3"
+#define VTUNERC_MODULE_VERSION "1.1p4"
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
@@ -208,6 +208,9 @@ int vtunerc_read_proc(char *buffer, char **start, off_t offset, int size,
 	sprintf(outbuf+blen, " (len=%d)\n", pcnt);
 	blen = strlen(outbuf);
 	sprintf(outbuf+blen, "  FE type : %s\n", get_fe_name(ctx->feinfo));
+
+	blen = strlen(outbuf);
+	sprintf(outbuf+blen, "  msg xchg: %d/%d\n", ctx->ctrldev_request.type, ctx->ctrldev_response.type);
 
 	blen = strlen(outbuf);
 
