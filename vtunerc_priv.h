@@ -95,7 +95,7 @@ struct vtunerc_ctx {
 int vtunerc_register_ctrldev(struct vtunerc_ctx *ctx);
 void vtunerc_unregister_ctrldev(struct vtunerc_config *config);
 struct vtunerc_ctx *vtunerc_get_ctx(int minor);
-int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx);
+int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx, int vtype);
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx);
 int vtunerc_ctrldev_xchange_message(struct vtunerc_ctx *ctx,
 					struct vtuner_message *msg,

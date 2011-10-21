@@ -156,8 +156,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 					unsigned long arg)
 {
 	struct vtunerc_ctx *ctx = file->private_data;
-	int len, ret = 0;
-	int i;
+	int len, i, vtype, ret = 0;
 
 	if (ctx->closing)
 		return -EINTR;
@@ -196,22 +195,22 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 	case VTUNER_SET_TYPE:
 		dprintk(ctx, "msg VTUNER_SET_TYPE\n");
 		if (strcasecmp((char *)arg, "DVB-S") == 0) {
-			ctx->vtype = VT_S;
+			vtype = VT_S;
 			printk(KERN_NOTICE "vtunerc%d: setting DVB-S tuner vtype\n",
 					ctx->idx);
 		} else
 		if (strcasecmp((char *)arg, "DVB-S2") == 0) {
-			ctx->vtype = VT_S2;
+			vtype = VT_S2;
 			printk(KERN_NOTICE "vtunerc%d: setting DVB-S2 tuner vtype\n",
 					ctx->idx);
 		} else
 		if (strcasecmp((char *)arg, "DVB-T") == 0) {
-			ctx->vtype = VT_T;
+			vtype = VT_T;
 			printk(KERN_NOTICE "vtunerc%d: setting DVB-T tuner vtype\n",
 					ctx->idx);
 		} else
 		if (strcasecmp((char *)arg, "DVB-C") == 0) {
-			ctx->vtype = VT_C;
+			vtype = VT_C;
 			printk(KERN_NOTICE "vtunerc%d: setting DVB-C tuner vtype\n",
 					ctx->idx);
 		} else {
@@ -221,7 +220,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 			break;
 		}
 
-		if ((vtunerc_frontend_init(ctx))) {
+		if ((vtunerc_frontend_init(ctx, vtype))) {
 			ctx->vtype = 0;
 			printk(KERN_ERR "vtunerc%d: failed to initialize tuner's internals\n",
 					ctx->idx);

@@ -371,21 +371,24 @@ static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops;
 static struct dvb_frontend *dvb_proxyfe_ofdm_attach(struct vtunerc_ctx *ctx)
 {
 	struct dvb_proxyfe_state *state = NULL;
+	struct dvb_frontend *fe = ctx->fe;
 
-	/* allocate memory for the internal state */
-	state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
-	if (state == NULL)
-		goto error;
+	if (!fe) {
+		/* allocate memory for the internal state */
+		state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
+		if (state == NULL) {
+			kfree(state);
+			return NULL;
+		}
 
-	/* create dvb_frontend */
-	memcpy(&state->frontend.ops, &dvb_proxyfe_ofdm_ops, sizeof(struct dvb_frontend_ops));
-	state->frontend.demodulator_priv = state;
-	state->ctx = ctx;
-	return &state->frontend;
+		fe = &state->frontend;
+		fe->demodulator_priv = state;
+		state->ctx = ctx;
+	}
 
-error:
-	kfree(state);
-	return NULL;
+	memcpy(&fe->ops, &dvb_proxyfe_ofdm_ops, sizeof(struct dvb_frontend_ops));
+
+	return fe;
 }
 
 static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops;
@@ -393,25 +396,28 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops;
 static struct dvb_frontend *dvb_proxyfe_qpsk_attach(struct vtunerc_ctx *ctx, int can_2g_modulation)
 {
 	struct dvb_proxyfe_state *state = NULL;
+	struct dvb_frontend *fe = ctx->fe;
 
-	/* allocate memory for the internal state */
-	state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
-	if (state == NULL)
-		goto error;
+	if (!fe) {
+		/* allocate memory for the internal state */
+		state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
+		if (state == NULL) {
+			kfree(state);
+			return NULL;
+		}
 
-	/* create dvb_frontend */
-	memcpy(&state->frontend.ops, &dvb_proxyfe_qpsk_ops, sizeof(struct dvb_frontend_ops));
-	if (can_2g_modulation) {
-		state->frontend.ops.info.caps |= FE_CAN_2G_MODULATION;
-		strcpy(state->frontend.ops.info.name, "vTuner proxyFE DVB-S2");
+		fe = &state->frontend;
+		fe->demodulator_priv = state;
+		state->ctx = ctx;
 	}
-	state->frontend.demodulator_priv = state;
-	state->ctx = ctx;
-	return &state->frontend;
 
-error:
-	kfree(state);
-	return NULL;
+	memcpy(&fe->ops, &dvb_proxyfe_qpsk_ops, sizeof(struct dvb_frontend_ops));
+	if (can_2g_modulation) {
+		fe->ops.info.caps |= FE_CAN_2G_MODULATION;
+		strcpy(fe->ops.info.name, "vTuner proxyFE DVB-S2");
+	}
+
+	return fe;
 }
 
 static struct dvb_frontend_ops dvb_proxyfe_qam_ops;
@@ -419,21 +425,24 @@ static struct dvb_frontend_ops dvb_proxyfe_qam_ops;
 static struct dvb_frontend *dvb_proxyfe_qam_attach(struct vtunerc_ctx *ctx)
 {
 	struct dvb_proxyfe_state *state = NULL;
+	struct dvb_frontend *fe = ctx->fe;
 
-	/* allocate memory for the internal state */
-	state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
-	if (state == NULL)
-		goto error;
+	if (!fe) {
+		/* allocate memory for the internal state */
+		state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
+		if (state == NULL) {
+			kfree(state);
+			return NULL;
+		}
 
-	/* create dvb_frontend */
-	memcpy(&state->frontend.ops, &dvb_proxyfe_qam_ops, sizeof(struct dvb_frontend_ops));
-	state->frontend.demodulator_priv = state;
-	state->ctx = ctx;
-	return &state->frontend;
+		fe = &state->frontend;
+		fe->demodulator_priv = state;
+		state->ctx = ctx;
+	}
 
-error:
-	kfree(state);
-	return NULL;
+	memcpy(&fe->ops, &dvb_proxyfe_qam_ops, sizeof(struct dvb_frontend_ops));
+
+	return fe;
 }
 
 static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops = {
@@ -539,17 +548,17 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops = {
 
 };
 
-int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx)
+int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx, int vtype)
 {
-	int ret;
+	int ret = 0;
 
-	if (ctx->fe) {
+	if (ctx->fe && vtype == ctx->vtype) {
 		printk(KERN_NOTICE "vtunerc%d: frontend already initialized as type=%d\n",
 				ctx->idx, ctx->vtype);
 		return 0;
 	}
 
-	switch (ctx->vtype) {
+	switch (vtype) {
 	case VT_S:
 		ctx->fe = dvb_proxyfe_qpsk_attach(ctx, 0);
 		break;
@@ -567,9 +576,11 @@ int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx)
 				ctx->idx, ctx->vtype);
 		return -EINVAL;
 	}
-	ret = dvb_register_frontend(&ctx->dvb_adapter, ctx->fe);
 
-	return 0;
+	if(ctx->vtype == VT_NULL) // means: was frontend not registered yet?
+		ret = dvb_register_frontend(&ctx->dvb_adapter, ctx->fe);
+
+	return ret;
 }
 
 int /*__devinit*/ vtunerc_frontend_clear(struct vtunerc_ctx *ctx)

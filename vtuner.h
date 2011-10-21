@@ -21,6 +21,7 @@
 #include <linux/dvb/frontend.h>
 #include <linux/dvb/dmx.h>
 
+#define VT_NULL 0x00
 #define VT_S   0x01
 #define VT_C   0x02
 #define VT_T   0x04
