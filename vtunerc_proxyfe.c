@@ -370,14 +370,14 @@ static struct dvb_frontend_ops dvb_proxyfe_ofdm_ops;
 
 static struct dvb_frontend *dvb_proxyfe_ofdm_attach(struct vtunerc_ctx *ctx)
 {
-	struct dvb_proxyfe_state *state = NULL;
 	struct dvb_frontend *fe = ctx->fe;
 
 	if (!fe) {
+		struct dvb_proxyfe_state *state = NULL;
+
 		/* allocate memory for the internal state */
 		state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
 		if (state == NULL) {
-			kfree(state);
 			return NULL;
 		}
 
@@ -395,14 +395,14 @@ static struct dvb_frontend_ops dvb_proxyfe_qpsk_ops;
 
 static struct dvb_frontend *dvb_proxyfe_qpsk_attach(struct vtunerc_ctx *ctx, int can_2g_modulation)
 {
-	struct dvb_proxyfe_state *state = NULL;
 	struct dvb_frontend *fe = ctx->fe;
 
 	if (!fe) {
+		struct dvb_proxyfe_state *state = NULL;
+
 		/* allocate memory for the internal state */
 		state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
 		if (state == NULL) {
-			kfree(state);
 			return NULL;
 		}
 
@@ -424,14 +424,14 @@ static struct dvb_frontend_ops dvb_proxyfe_qam_ops;
 
 static struct dvb_frontend *dvb_proxyfe_qam_attach(struct vtunerc_ctx *ctx)
 {
-	struct dvb_proxyfe_state *state = NULL;
 	struct dvb_frontend *fe = ctx->fe;
 
 	if (!fe) {
+		struct dvb_proxyfe_state *state = NULL;
+
 		/* allocate memory for the internal state */
 		state = kmalloc(sizeof(struct dvb_proxyfe_state), GFP_KERNEL);
 		if (state == NULL) {
-			kfree(state);
 			return NULL;
 		}
 
@@ -579,6 +579,8 @@ int /*__devinit*/ vtunerc_frontend_init(struct vtunerc_ctx *ctx, int vtype)
 
 	if(ctx->vtype == VT_NULL) // means: was frontend not registered yet?
 		ret = dvb_register_frontend(&ctx->dvb_adapter, ctx->fe);
+
+	ctx->vtype = vtype;
 
 	return ret;
 }

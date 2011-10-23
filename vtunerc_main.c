@@ -32,7 +32,7 @@
 
 #include "vtunerc_priv.h"
 
-#define VTUNERC_MODULE_VERSION "1.2"
+#define VTUNERC_MODULE_VERSION "1.2p1"
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
