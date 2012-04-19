@@ -32,7 +32,7 @@
 
 #include "vtunerc_priv.h"
 
-#define VTUNERC_MODULE_VERSION "1.2p1"
+#define VTUNERC_MODULE_VERSION "1.2p2"
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
@@ -40,7 +40,9 @@ DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
 #define VTUNERC_PROC_FILENAME	"vtunerc%i"
 
+#ifndef VTUNERC_MAX_ADAPTERS
 #define VTUNERC_MAX_ADAPTERS	4
+#endif
 
 static struct vtunerc_ctx *vtunerc_tbl[VTUNERC_MAX_ADAPTERS] = { NULL };
 
