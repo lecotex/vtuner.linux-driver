@@ -53,13 +53,16 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 	if (kernel_buf == NULL)
 		return -ENOMEM;
 
-	if (down_interruptible(&ctx->tswrite_sem))
+	if (down_interruptible(&ctx->tswrite_sem)) {
+		kfree(kernel_buf);
 		return -ERESTARTSYS;
+	}
 
 	if (copy_from_user(kernel_buf, buff, len)) {
 		printk(KERN_ERR "vtunerc%d: userdata passing error\n",
 				ctx->idx);
 		up(&ctx->tswrite_sem);
+		kfree(kernel_buf);
 		return -EINVAL;
 	}
 
@@ -72,6 +75,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 						ctx->idx, i / 188, kernel_buf[i], kernel_buf[i + 1],
 						kernel_buf[i + 2], kernel_buf[i + 3], kernel_buf[i + 4]);
 				up(&ctx->tswrite_sem);
+				kfree(kernel_buf);
 				return -EINVAL;
 			}
 	}
@@ -175,6 +179,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 			break;
 		}
 		if (copy_from_user(ctx->name, (char *)arg, len)) {
+			kfree(ctx->name);
 			ret = -EFAULT;
 			break;
 		}
@@ -241,6 +246,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 			break;
 		}
 		if (copy_from_user(ctx->feinfo, (char *)arg, len)) {
+			kfree(ctx->feinfo);
 			ret = -EFAULT;
 			break;
 		}

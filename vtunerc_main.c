@@ -32,7 +32,7 @@
 
 #include "vtunerc_priv.h"
 
-#define VTUNERC_MODULE_VERSION "1.2p2"
+#define VTUNERC_MODULE_VERSION "1.2p3"
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
@@ -257,14 +257,17 @@ static int __init vtunerc_init(void)
 
 	printk(KERN_INFO "virtual DVB adapter driver, version "
 			VTUNERC_MODULE_VERSION
-			", (c) 2010-11 Honza Petrous, SmartImp.cz\n");
+			", (c) 2010-12 Honza Petrous, SmartImp.cz\n");
 
 	request_module("dvb-core"); /* FIXME: dunno which way it should work :-/ */
 
 	for (idx = 0; idx < config.devices; idx++) {
 		ctx = kzalloc(sizeof(struct vtunerc_ctx), GFP_KERNEL);
-		if (!ctx)
+		if (!ctx) {
+			while(idx)
+				kfree(vtunerc_tbl[--idx]);
 			return -ENOMEM;
+		}
 
 		vtunerc_tbl[idx] = ctx;
 
