@@ -1,3 +1,25 @@
+vtunerc linux kernel driver is part of virtualized DVB
+adapter project named "vtuner".
+
+Please read more information on project home page:
+http://code.google.com/p/vtuner/
+
+Because of very forbiddingly reaction of some
+DVB developers on driver review the driver stays outside
+of kernel source code.
+
+Developers are doing theirs best to stay in sync
+with kernel DVB changes every time when some
+of that occurs. 
+
+Of course, any patches or other help are highly welcome.
+
+Honza
+
+
+
+
+--- old notices follow ---
 
 // only few comments, yet ;)
 

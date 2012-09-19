@@ -1,7 +1,7 @@
 /*
  * vtunerc: Virtual adapter driver
  *
- * Copyright (C) 2010-11 Honza Petrous <jpetrous@smartimp.cz>
+ * Copyright (C) 2010-12 Honza Petrous <jpetrous@smartimp.cz>
  * [Created 2010-03-23]
  * Sponsored by Smartimp s.r.o. for its NessieDVB.com box
  *
@@ -32,7 +32,7 @@
 
 #include "vtunerc_priv.h"
 
-#define VTUNERC_MODULE_VERSION "1.2p3"
+#define VTUNERC_MODULE_VERSION "1.3"
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
