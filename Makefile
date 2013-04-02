@@ -10,6 +10,7 @@ CONFIG_DVB_VTUNERC ?= m
 
 obj-$(CONFIG_DVB_VTUNERC) += vtunerc.o
 
+ccflags-y += -Idrivers/media/dvb-core
 ccflags-y += -Idrivers/media/dvb/dvb-core
 ccflags-y += -Idrivers/media/dvb/frontends
 ccflags-y += -Idrivers/media/common/tuners
