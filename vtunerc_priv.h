@@ -74,6 +74,9 @@ struct vtunerc_ctx {
 
 	char *procname;
 
+	char *kernel_buf;
+	ssize_t kernel_buf_size;
+
 	/* ctrldev */
 	char trail[188];
 	unsigned int trailsize;

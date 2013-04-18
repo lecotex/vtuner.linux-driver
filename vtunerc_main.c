@@ -32,7 +32,7 @@
 
 #include "vtunerc_priv.h"
 
-#define VTUNERC_MODULE_VERSION "1.3"
+#define VTUNERC_MODULE_VERSION "1.4"
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
@@ -278,6 +278,10 @@ static int __init vtunerc_init(void)
 		init_waitqueue_head(&ctx->ctrldev_wait_request_wq);
 		init_waitqueue_head(&ctx->ctrldev_wait_response_wq);
 
+		// buffer
+		ctx->kernel_buf = NULL;
+		ctx->kernel_buf_size = 0;
+
 		/* dvb */
 
 		/* create new adapter */
@@ -398,6 +402,16 @@ static void __exit vtunerc_exit(void)
 		dvb_dmxdev_release(&ctx->dmxdev);
 		dvb_dmx_release(dvbdemux);
 		dvb_unregister_adapter(&ctx->dvb_adapter);
+
+		// free allocated buffer
+		if(ctx->kernel_buf != NULL) {
+			kfree(ctx->kernel_buf);
+			printk(KERN_INFO "vtunerc%d: deallocated buffer of %Zu bytes\n", idx, ctx->kernel_buf_size);
+			ctx->kernel_buf = NULL;
+			ctx->kernel_buf_size = 0;
+
+		}
+
 		kfree(ctx);
 	}
 

@@ -35,7 +35,6 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
 	struct dvb_demux *demux = &ctx->demux;
-	char *kernel_buf;
 	int tailsize = len % 188;
 
 	if (ctx->closing)
@@ -48,21 +47,33 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 	}
 
 	len -= tailsize;
-	kernel_buf = kmalloc(len, GFP_KERNEL);
 
-	if (kernel_buf == NULL)
-		return -ENOMEM;
+	// new buffer need to be allocated ?
+	if ((ctx->kernel_buf == NULL) || (len > ctx->kernel_buf_size)) {
+		// free old buffer
+		if (ctx->kernel_buf) {
+			kfree(ctx->kernel_buf);
+			ctx->kernel_buf = NULL;
+			ctx->kernel_buf_size = 0;
+		}
+		// allocate a bigger buffer
+		ctx->kernel_buf = kmalloc(len, GFP_KERNEL);
+		if (!ctx->kernel_buf) {
+			printk(KERN_ERR "vtunerc%d: unable to allocate buffer of %Zu bytes\n", ctx->idx, len);
+			return -ENOMEM;
+		}
+		ctx->kernel_buf_size = len;
+		printk(KERN_INFO "vtunerc%d: allocated buffer of %Zu bytes\n", ctx->idx, len);
+	}
 
 	if (down_interruptible(&ctx->tswrite_sem)) {
-		kfree(kernel_buf);
 		return -ERESTARTSYS;
 	}
 
-	if (copy_from_user(kernel_buf, buff, len)) {
+	if (copy_from_user(ctx->kernel_buf, buff, len)) {
 		printk(KERN_ERR "vtunerc%d: userdata passing error\n",
 				ctx->idx);
 		up(&ctx->tswrite_sem);
-		kfree(kernel_buf);
 		return -EINVAL;
 	}
 
@@ -70,26 +81,23 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 		int i;
 
 		for (i = 0; i < len; i += 188)
-			if (kernel_buf[i] != 0x47) { /* start of TS packet */
+			if (ctx->kernel_buf[i] != 0x47) { /* start of TS packet */
 				printk(KERN_ERR "vtunerc%d: Data not start on packet boundary: index=%d data=%02x %02x %02x %02x %02x ...\n",
-						ctx->idx, i / 188, kernel_buf[i], kernel_buf[i + 1],
-						kernel_buf[i + 2], kernel_buf[i + 3], kernel_buf[i + 4]);
+						ctx->idx, i / 188, ctx->kernel_buf[i], ctx->kernel_buf[i + 1],
+						ctx->kernel_buf[i + 2], ctx->kernel_buf[i + 3], ctx->kernel_buf[i + 4]);
 				up(&ctx->tswrite_sem);
-				kfree(kernel_buf);
 				return -EINVAL;
 			}
 	}
 
 	ctx->stat_wr_data += len;
-	dvb_dmx_swfilter_packets(demux, kernel_buf, len / 188);
+	dvb_dmx_swfilter_packets(demux, ctx->kernel_buf, len / 188);
 
 	up(&ctx->tswrite_sem);
 
 #ifdef CONFIG_PROC_FS
 	/* TODO:  analyze injected data for statistics */
 #endif
-
-	kfree(kernel_buf);
 
 	return len;
 }
