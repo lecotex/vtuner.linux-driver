@@ -179,7 +179,7 @@ static long vtunerc_ctrldev_ioctl(struct file *file, unsigned int cmd,
 	switch (cmd) {
 	case VTUNER_SET_NAME:
 		dprintk(ctx, "msg VTUNER_SET_NAME\n");
-		len = strlen((char *)arg) + 1;
+		len = sizeof((char *)arg);
 		ctx->name = kmalloc(len, GFP_KERNEL);
 		if (ctx->name == NULL) {
 			printk(KERN_ERR "vtunerc%d: no memory\n", ctx->idx);
